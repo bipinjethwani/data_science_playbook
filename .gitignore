@@ -1,0 +1,16 @@
+# SQLite databases (regenerated from .sql scripts)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Editor backups
+*~
+*.swp
+*.swo
