@@ -85,3 +85,90 @@ sqlite3 -header -column practice.db
 3. Created `01_window_functions.sql` with practice examples covering `ROW_NUMBER`, `RANK`, `DENSE_RANK`, `LAG`, `LEAD`, `NTILE`, `FIRST_VALUE`, `LAST_VALUE`, running totals, moving averages, and percent-of-total
 
 No Docker, dev containers, or servers needed — just `sqlite3` (pre-installed on macOS).
+
+---
+
+## test_bed/ — HR Course Database
+
+The `test_bed/` folder contains an HR dataset converted from a PostgreSQL dump.
+
+### Resume Here
+
+```sh
+cd advanced_sql && sqlite3 -header -column hr_db.db
+```
+
+To reset the database:
+```sh
+sqlite3 hr_db.db < hr_data.sql
+```
+
+### Tables (9 total)
+
+| Table | Rows | Key Columns |
+|-------|------|-------------|
+| `hris` | 51 | employee_id, first_name, last_name, department, salary, hire_date, termination_date |
+| `radford_compensation` | 101 | employee_id, job_title, department, base_salary, bonus, stock_grants |
+| `employee_absence` | 100 | employee_id, department, hours_absent |
+| `learning_management` | 100 | employee_id, course_name, completion_status |
+| `engagement_results` | 97 | employee_id, satisfaction_score, work_life_balance_score |
+| `demographics` | 50 | employee_id, gender, nationality, city |
+| `talent_development` | 43 | employee_id, department, training_hours |
+| `audit_log` | 2 | event_time, event_type, detail |
+| `hris_backup` | 0 | (backup copy of hris — empty) |
+
+### Left Off Here: Window Functions vs GROUP BY
+
+**Context:** 51 employees total, 47 currently active (`termination_date IS NULL`).
+
+#### 1. Basic counts
+
+```sql
+-- Total employees
+SELECT COUNT(*) FROM hris;
+-- → 51
+
+-- Active employees only
+SELECT COUNT(*) FROM hris WHERE termination_date IS NULL;
+-- → 47
+```
+
+#### 2. AVG without GROUP BY — collapses to one row
+
+```sql
+SELECT department, AVG(salary) FROM hris WHERE termination_date IS NULL;
+```
+Returns **1 row** — the overall average across all departments. The `department` value shown is arbitrary (just whichever row SQLite picks).
+
+#### 3. AVG with GROUP BY — one row per department
+
+```sql
+SELECT department, AVG(salary)
+FROM hris
+WHERE termination_date IS NULL
+GROUP BY department;
+```
+Returns **11 rows** — one per department. This is the classic aggregation approach: you lose individual employee rows.
+
+#### 4. Window function — every row kept, avg computed per partition
+
+```sql
+SELECT employee_id, department, salary,
+       AVG(salary) OVER (PARTITION BY department) AS avg_dept_salary
+FROM hris
+WHERE termination_date IS NULL;
+```
+Returns **47 rows** — every active employee, with their department's average salary alongside. No grouping, no collapsing rows.
+
+#### 5. Window function + COUNT(*) OVER() for total row count
+
+```sql
+SELECT employee_id, department, salary,
+       AVG(salary) OVER (PARTITION BY department) AS avg_dept_salary,
+       COUNT(*) OVER () AS total_rows
+FROM hris
+WHERE termination_date IS NULL;
+```
+Returns **47 rows** — same as above, but with `total_rows = 47` on every row. `COUNT(*) OVER()` with an empty `OVER()` counts all rows in the result set.
+
+**Key insight:** `GROUP BY` collapses rows → one row per group. `OVER (PARTITION BY ...)` keeps every row and adds the aggregate as an extra column.
